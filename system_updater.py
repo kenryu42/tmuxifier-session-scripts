@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 System Updater Script
-Runs various system update commands and generates a summary using Gemini API.
+Runs various system update commands concurrently and generates a summary using Gemini API.
 """
 
 import subprocess
@@ -10,12 +10,27 @@ import os
 import urllib.request
 import urllib.parse
 import urllib.error
-from typing import Tuple
+import concurrent.futures
+import threading
+import time
+from typing import Tuple, Dict
 
 
-def run_command(cmd: str, description: str) -> Tuple[bool, str]:
-    """Run a command and capture its output."""
-    print(f"========== {description} ==========")
+# Thread-safe printing
+print_lock = threading.Lock()
+
+
+def safe_print(*args, **kwargs):
+    """Thread-safe print function."""
+    with print_lock:
+        print(*args, **kwargs)
+
+
+def run_command(cmd: str, description: str) -> Tuple[bool, str, str]:
+    """Run a command and capture its output. Returns (success, output, description)."""
+    safe_print(f"🚀 Starting: {description}")
+    start_time = time.time()
+
     try:
         # Use login shell to ensure all aliases and functions are loaded
         # First try to source common shell configs, then run the command
@@ -33,24 +48,29 @@ source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null || true
         )
         output = f"{result.stdout}\n{result.stderr}".strip()
 
-        if result.returncode == 0:
-            print(f"✅ {description} completed successfully")
-        else:
-            print(f"⚠️  {description} completed with warnings/errors")
+        elapsed = time.time() - start_time
 
-        return result.returncode == 0, output
+        if result.returncode == 0:
+            safe_print(f"✅ Completed: {description} ({elapsed:.1f}s)")
+        else:
+            safe_print(f"⚠️  Completed with warnings: {description} ({elapsed:.1f}s)")
+
+        return result.returncode == 0, output, description
     except subprocess.TimeoutExpired:
-        error_msg = f"❌ {description} timed out after 5 minutes"
-        print(error_msg)
-        return False, error_msg
+        elapsed = time.time() - start_time
+        error_msg = f"❌ {description} timed out after {elapsed:.1f}s"
+        safe_print(error_msg)
+        return False, error_msg, description
+
     except Exception as e:
-        error_msg = f"❌ {description} failed: {str(e)}"
-        print(error_msg)
-        return False, error_msg
+        elapsed = time.time() - start_time
+        error_msg = f"❌ {description} failed after {elapsed:.1f}s: {str(e)}"
+        safe_print(error_msg)
+        return False, error_msg, description
 
 
 def run_all_updates() -> str:
-    """Run all system update commands and return combined output."""
+    """Run all system update commands concurrently and return combined output."""
 
     update_commands = [
         (
@@ -64,20 +84,52 @@ def run_all_updates() -> str:
         ("omz update", "Updating Oh My Zsh"),
     ]
 
+    print(f"🏁 Starting {len(update_commands)} updates concurrently...")
+    print("=" * 60)
+
+    # Store results indexed by description for consistent ordering
+    results: Dict[str, Tuple[bool, str]] = {}
+    start_time = time.time()
+
+    # Run all commands concurrently
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as executor:
+        # Submit all tasks
+        future_to_cmd = {
+            executor.submit(run_command, cmd, desc): desc
+            for cmd, desc in update_commands
+        }
+
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_cmd):
+            try:
+                success, output, description = future.result()
+                results[description] = (success, output)
+            except Exception as e:
+                description = future_to_cmd[future]
+                results[description] = (False, f"Exception: {str(e)}")
+
+    total_time = time.time() - start_time
+    print("=" * 60)
+    print(f"🎯 All updates completed in {total_time:.1f}s")
+
+    # Build output in original order
     all_output = []
     all_output.append("SYSTEM UPDATE REPORT")
     all_output.append("=" * 50)
+    all_output.append(f"Total execution time: {total_time:.1f} seconds")
+    all_output.append("")
 
     for cmd, description in update_commands:
-        success, output = run_command(cmd, description)
-        all_output.append(f"\n{description}:")
-        all_output.append("-" * len(description))
-        all_output.append(output if output else "No output")
+        if description in results:
+            success, output = results[description]
+            all_output.append(f"{description}:")
+            all_output.append("-" * len(description))
+            all_output.append(output if output else "No output")
 
-        if not success:
-            all_output.append("⚠️ Command failed or had issues")
+            if not success:
+                all_output.append("⚠️ Command failed or had issues")
 
-        all_output.append("")  # Empty line separator
+            all_output.append("")  # Empty line separator
 
     return "\n".join(all_output)
 
@@ -140,10 +192,10 @@ def generate_summary(update_output: str) -> str:
 
 def main():
     """Main function."""
-    print("🚀 Starting System Updates...")
+    print("🚀 Starting Concurrent System Updates...")
     print("=" * 50)
 
-    # Run all updates
+    # Run all updates concurrently
     update_output = run_all_updates()
 
     # Print the full output
@@ -157,7 +209,7 @@ def main():
     summary = generate_summary(update_output)
     print(summary)
 
-    print("\n🎉 System update process completed!")
+    print("\n🎉 Concurrent system update process completed!")
 
 
 if __name__ == "__main__":
