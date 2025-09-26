@@ -8,11 +8,11 @@ import subprocess
 import json
 import os
 import urllib.request
-import urllib.parse
 import urllib.error
 import concurrent.futures
 import threading
 import time
+import random
 from typing import Tuple, Dict
 
 
@@ -144,50 +144,67 @@ def generate_summary(update_output: str) -> str:
     print("========== Generating Summary ==========")
     print("📡 Calling Gemini API for summary...")
 
-    try:
-        # Prepare the payload
-        prompt = f"Summarize the following system update commands result in a bullet list format:\n\n{update_output}"
+    prompt = (
+        "Summarize the following system update commands result in a bullet list format:\n\n"
+        f"{update_output}"
+    )
 
-        payload = {
-            "contents": [{"role": "user", "parts": [{"text": prompt}]}],
-            "generationConfig": {},
-        }
+    payload = {
+        "contents": [{"role": "user", "parts": [{"text": prompt}]}],
+        "generationConfig": {},
+    }
 
-        # Make API call
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models/"
+        "gemini-2.0-flash:generateContent"
+        f"?key={api_key}"
+    )
 
-        # Prepare request
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(
-            url, data=data, headers={"Content-Type": "application/json"}
-        )
+    data = json.dumps(payload).encode("utf-8")
 
-        # Make the request
-        response = urllib.request.urlopen(req, timeout=30)
+    max_attempts = 5
+    base_delay = 1.0
+    last_error = "❌ Unknown error occurred"
 
-        if response.status == 200:
-            response_data = json.loads(response.read().decode("utf-8"))
-            summary = (
-                response_data.get("candidates", [{}])[0]
-                .get("content", {})
-                .get("parts", [{}])[0]
-                .get("text", "No summary generated")
+    for attempt in range(1, max_attempts + 1):
+        try:
+            req = urllib.request.Request(
+                url, data=data, headers={"Content-Type": "application/json"}
             )
-            print("✅ Summary generated successfully")
-            return f"📋 SUMMARY:\n{'-' * 20}\n{summary}"
-        else:
-            error_msg = f"❌ API call failed with HTTP {response.status}"
-            print(error_msg)
-            return error_msg
 
-    except urllib.error.URLError as e:
-        error_msg = f"❌ Network error: {str(e)}"
-        print(error_msg)
-        return error_msg
-    except Exception as e:
-        error_msg = f"❌ Unexpected error: {str(e)}"
-        print(error_msg)
-        return error_msg
+            with urllib.request.urlopen(req, timeout=30) as response:
+                if response.status == 200:
+                    response_data = json.loads(response.read().decode("utf-8"))
+                    summary = (
+                        response_data.get("candidates", [{}])[0]
+                        .get("content", {})
+                        .get("parts", [{}])[0]
+                        .get("text", "No summary generated")
+                    )
+                    print("✅ Summary generated successfully")
+                    return f"📋 SUMMARY:\n{'-' * 20}\n{summary}"
+
+                last_error = f"❌ API call failed with HTTP {response.status}"
+                print(last_error)
+
+        except urllib.error.URLError as e:
+            last_error = f"❌ Network error: {str(e)}"
+            print(last_error)
+        except Exception as e:
+            last_error = f"❌ Unexpected error: {str(e)}"
+            print(last_error)
+
+        if attempt < max_attempts:
+            backoff = base_delay * (2 ** (attempt - 1))
+            jitter = random.uniform(0, base_delay)
+            sleep_time = backoff + jitter
+            print(
+                f"🔁 Retry {attempt} failed, retrying in {sleep_time:.1f}s... "
+                f"({attempt + 1}/{max_attempts})"
+            )
+            time.sleep(sleep_time)
+
+    return last_error
 
 
 def main():
