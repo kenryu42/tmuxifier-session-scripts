@@ -14,10 +14,14 @@ import threading
 import time
 import random
 from typing import Tuple, Dict
+from rich.console import Console
+from rich.markdown import Markdown
 
+MODEL = "gemini-2.0-flash-lite"
 
 # Thread-safe printing
 print_lock = threading.Lock()
+console = Console()
 
 
 def safe_print(*args, **kwargs):
@@ -115,7 +119,7 @@ def run_all_updates() -> str:
     # Build output in original order
     all_output = []
     all_output.append("SYSTEM UPDATE REPORT")
-    all_output.append("=" * 50)
+    all_output.append("=" * 60)
     all_output.append(f"Total execution time: {total_time:.1f} seconds")
     all_output.append("")
 
@@ -141,8 +145,9 @@ def generate_summary(update_output: str) -> str:
     if not api_key:
         return "❌ Error: GEMINI_API_KEY environment variable is not set"
 
-    print("========== Generating Summary ==========")
-    print("📡 Calling Gemini API for summary...")
+    print("==================== Generating Summary ====================")
+    print("📡 Calling LLM for summary...")
+    print("Using model: ", MODEL)
 
     prompt = (
         "Summarize the following system update commands result in a bullet list format:\n\n"
@@ -156,7 +161,7 @@ def generate_summary(update_output: str) -> str:
 
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models/"
-        "gemini-2.0-flash:generateContent"
+        f"{MODEL}:generateContent"
         f"?key={api_key}"
     )
 
@@ -182,7 +187,7 @@ def generate_summary(update_output: str) -> str:
                         .get("text", "No summary generated")
                     )
                     print("✅ Summary generated successfully")
-                    return f"📋 SUMMARY:\n{'-' * 20}\n{summary}"
+                    return summary
 
                 last_error = f"❌ API call failed with HTTP {response.status}"
                 print(last_error)
@@ -210,21 +215,28 @@ def generate_summary(update_output: str) -> str:
 def main():
     """Main function."""
     print("🚀 Starting Concurrent System Updates...")
-    print("=" * 50)
+    print("=" * 60)
 
     # Run all updates concurrently
     update_output = run_all_updates()
 
     # Print the full output
-    print("\n" + "=" * 50)
-    print("FULL UPDATE OUTPUT:")
-    print("=" * 50)
-    print(update_output)
+    # print("\n" + "=" * 50)
+    # print("FULL UPDATE OUTPUT:")
+    # print("=" * 50)
+    # print(update_output)
 
     # Generate and print summary
-    print("\n" + "=" * 50)
+    print("=" * 60 + "\n")
     summary = generate_summary(update_output)
-    print(summary)
+
+    # Render markdown if we got a successful summary
+    if summary and not summary.startswith("❌"):
+        console.print("📋 SUMMARY:")
+        console.print("=" * 60)
+        console.print(Markdown(summary))
+    else:
+        print(summary)
 
     print("\n🎉 Concurrent system update process completed!")
 
