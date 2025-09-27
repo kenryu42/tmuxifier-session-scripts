@@ -187,6 +187,7 @@ def generate_summary(update_output: str) -> str:
                         .get("text", "No summary generated")
                     )
                     print("✅ Summary generated successfully")
+                    print("=" * 60 + "\n")
                     return summary
 
                 last_error = f"❌ API call failed with HTTP {response.status}"
@@ -232,9 +233,9 @@ def main():
 
     # Render markdown if we got a successful summary
     if summary and not summary.startswith("❌"):
-        console.print("📋 SUMMARY:")
-        console.print("=" * 60)
+        console.print("======================== 📋 SUMMARY ========================\n")
         console.print(Markdown(summary))
+        console.print("\n" + "=" * 60)
     else:
         print(summary)
 
