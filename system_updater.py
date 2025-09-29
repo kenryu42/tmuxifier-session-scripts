@@ -147,7 +147,7 @@ def generate_summary(update_output: str) -> str:
 
     print("==================== Generating Summary ====================")
     print("📡 Calling LLM for summary...")
-    print("Using model: ", MODEL)
+    print("Using model:", MODEL)
 
     prompt = (
         "Summarize the following system update commands result in a bullet list format:\n\n"
