@@ -237,7 +237,7 @@ def main():
         console.print(Markdown(summary))
         console.print("\n" + "=" * 60)
     else:
-        print(summary)
+        print(update_output)
 
     print("\n🎉 Concurrent system update process completed!")
 
