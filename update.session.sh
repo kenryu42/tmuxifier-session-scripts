@@ -10,7 +10,7 @@ if initialize_session "update"; then
   new_window "update"
 
   # Run the Python system updater script with virtual environment
-  run_cmd "cd ~/.tmuxifier/layouts && source bin/activate && python3 system_updater.py"
+  run_cmd "source ~/.tmuxifier/layouts/bin/activate && python3 ~/.tmuxifier/layouts/system_updater.py"
 
 fi
 
