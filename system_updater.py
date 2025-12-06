@@ -48,9 +48,9 @@ UPDATE_COMMANDS = [
         "shell_source": False
     },
     {
-        "cmd": "omz update",
+        "cmd": '"$ZSH/tools/upgrade.sh" -v minimal || true',
         "desc": "Updating Oh My Zsh",
-        "shell_source": True
+        "shell_source": True  # Needs shell to expand $ZSH
     },
 ]
 
@@ -86,6 +86,8 @@ def run_command(cmd_config: Dict) -> Tuple[bool, str, str]:
         if needs_shell:
             # Use login shell to ensure all aliases and functions are loaded
             full_cmd = f"""
+export INTERACTIVE=false
+export CI=true 
 source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null || true
 {cmd}
 """
@@ -98,6 +100,7 @@ source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null || true
                 text=True,
                 timeout=TIMEOUT_SECONDS,
                 executable=shell_exec,
+                stdin=subprocess.DEVNULL
             )
         else:
             # Run directly with enhanced PATH for speed
@@ -108,6 +111,7 @@ source ~/.zshrc 2>/dev/null || source ~/.bashrc 2>/dev/null || true
                 text=True,
                 timeout=TIMEOUT_SECONDS,
                 env=get_enhanced_env(),
+                stdin=subprocess.DEVNULL
             )
 
         output = f"{result.stdout}\n{result.stderr}".strip()
